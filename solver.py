@@ -98,96 +98,73 @@ def AI(mat):
         flattened_matrix = [[col, (rown, coln)] for rown, row in enumerate(bit_mat) for coln, col in enumerate(row)]
         return sum((max(num1, num2)[0] / (abs(num1[1][0] - num2[1][0]) + abs(num1[1][1] - num2[1][1]))) ** 2 for start, num1 in enumerate(flattened_matrix, 1) for num2 in flattened_matrix[start:])
 
-    def main_function(bit_mat, depth):
-        
-        if bit_mat not in pre_move:
-            candidates = []
-            has_won = False
-            test_move, validity = merge(bit_mat)
+    def make_moves(bit_mat, depth):
+        merges = [[lambda bit_mat: bit_mat, lambda bit_mat: bit_mat, 'a'], [lambda bit_mat: reverse_m(bit_mat), lambda bit_mat: reverse_m(bit_mat), 'd'], [lambda bit_mat: transpose_m(bit_mat), lambda bit_mat: transpose_m(bit_mat), 'w'], [lambda bit_mat: reverse_m(transpose_m(bit_mat)), lambda bit_mat: transpose_m(reverse_m(bit_mat)), 's']]
+        candidates = []
+        has_won = False
+        for move in merges:
+            test_move, validity = merge(move[0](bit_mat))
             if validity:
+                test_move = move[1](test_move)
                 if test_move in static:
                     candidates.append(['a', test_move, static[test_move]])
                 else:
                     if any(col >= win_condition for row in test_move for col in row):
-                        candidates.append(['a', test_move, 0])
+                        candidates.append([move[2], test_move, [0, 0, (0, 0)]])
                     else:
-                        candidates.append(['a', test_move, abs_forcer(test_move)[0]])
-                if candidates[-1][2] <= 0:
+                        candidates.append([move[2], test_move, [0, 0, abs_forcer(test_move)]])
+                if candidates[-1][2][2][0] <= 0:
                     has_won = True
-                    static[test_move] = candidates[-1][2] + depth - board_complexity
-            test_move, validity = merge(reverse_m(bit_mat))
-            if validity:
-                test_move = reverse_m(test_move)
-                if test_move in static:
-                    candidates.append(['d', test_move, static[test_move]])
-                else:
-                    if any(col >= win_condition for row in test_move for col in row):
-                        candidates.append(['d', test_move, 0])
-                    else:
-                        candidates.append(['d', test_move, abs_forcer(test_move)[0]])
-                if candidates[-1][2] <= 0:
-                    has_won = True
-                    static[test_move] = candidates[-1][2] + depth - board_complexity
-            test_move, validity = merge(transpose_m(bit_mat))
-            if validity:
-                test_move = transpose_m(test_move)
-                if test_move in static:
-                    candidates.append(['w', test_move, static[test_move]])
-                else:
-                    if any(col >= win_condition for row in test_move for col in row):
-                        candidates.append(['w', test_move, 0])
-                    else:
-                        candidates.append(['w', test_move, abs_forcer(test_move)[0]])
-                if candidates[-1][2] <= 0:
-                    has_won = True
-                    static[test_move] = candidates[-1][2] + depth - board_complexity
-            test_move, validity = merge(reverse_m(transpose_m(bit_mat)))
-            if validity:
-                test_move = transpose_m(reverse_m(test_move))
-                if test_move in static:
-                    candidates.append(['s', test_move, static[test_move]])
-                else:
-                    if any(col >= win_condition for row in test_move for col in row):
-                        candidates.append(['s', test_move, 0])
-                    else:
-                        candidates.append(['s', test_move, abs_forcer(test_move)[0]])
-                if candidates[-1][2] <= 0:
-                    has_won = True
-                    static[test_move] = candidates[-1][2] + depth - board_complexity
-            if not(len(candidates)):
-                pre_move[bit_mat] = [None, [True, lose_score + 2 * depth + sum(col for row in bit_mat for col in row if col >= 1)]] # if a loss is unavoidable, losses with more merges will be favoured to maximise the average score metric, otherwise, the addition should be negligibly small in the grand scheme of things
-                return pre_move[bit_mat]
-            if has_won:
-                best_move = min(candidates, key = lambda i: i[2])
-                pre_move[bit_mat] = [best_move[0], [False, static[best_move[1]]]]
-                return pre_move[bit_mat]
-            for move in candidates:
-                if move[1] not in static:
-                    static[move[1]] = abs_pos(move[1]) * (move[2] + stabiliser) # multiplies the two penalty scores derived in abs_pos and abs_forcer to give a final penalty score
-                    # multiplication is likely not the best way to do it; it is more important to balance the penalty scores and lower the higher metric but with multiplication, lowering already low penalty scores is prioritised as it is easier to get a high percentage change there
-                    # the stabiliser is used to mitigate this limitation, but it is an imperfect method
-                move[2] = static[move[1]]
-            if depth:
-                candidates.sort(key = lambda i: i[2])
-                test_index = 0
-                best_move = [None, [True, impossible_score]]
-                cut_off = impossible_score
-                while (test_index < len(candidates)) and (best_move[1][0] or (candidates[test_index][2] <= cut_off)): # if there is a way to lose by force, keep looking
-                    if candidates[test_index][1] not in post_move:
-                        depth_scores = []
-                        for rown, row in enumerate(candidates[test_index][1]):
-                            for coln, col in enumerate(row):
-                                if col <= 1:
-                                    depth_scores.append(main_function(tuple(rw if rwn != rown else tuple(cl if cln != coln else 2 for cln, cl in enumerate(row)) for rwn, rw in enumerate(candidates[test_index][1])), depth - 1)[1])
-                        post_move[candidates[test_index][1]] = [any(i[0] for i in depth_scores), (sum(i[1] for i in depth_scores) + max(i[1] for i in depth_scores)) / (1 + len(depth_scores))] # prioritises having no immediate way to lose, then the expected score with a twist, being pessimistic and giving higher weightage to the worst possible score
-                    if post_move[candidates[test_index][1]] < best_move[1]:
-                        best_move = [candidates[test_index][0], post_move[candidates[test_index][1]]]
-                        cut_off = (1 + (depth / board_complexity)) * candidates[test_index][2] # the search net for promising moves is cast wider initially, but is less important when further from the current position
-                    test_index += 1
-                pre_move[bit_mat] = best_move
+                    static[test_move] = [candidates[-1][2][2][0] - depth, 0, candidates[-1][2][2]]
+        if has_won:
+            return (candidates, True)
+        for move in candidates:
+            if move[1] not in static:
+                move[2][1] = abs_pos(move[1])
+        return (candidates, False)
+
+    def main_function(bit_mat, candidates, has_won, depth):
+        
+        if not(len(candidates)):
+            pre_move[bit_mat] = [None, [True, lose_score + 2 * depth + sum(col for row in bit_mat for col in row if col >= 1)]] # if a loss is unavoidable, losses with more merges will be favoured to maximise the average score metric, otherwise, the addition should be negligibly small in the grand scheme of things
+            return pre_move[bit_mat]
+        if has_won:
+            best_move = min(candidates, key = lambda i: i[2])
+            pre_move[bit_mat] = [best_move[0], [False, static[best_move[1]]]]
+            return pre_move[bit_mat]
+        for move in candidates:
+            if move[1] not in static:
+                move[2][0] = move[2][1] * (move[2][2][0] + stabiliser) # multiplies the two penalty scores derived in abs_pos and abs_forcer to give a final penalty score
+                # multiplication is likely not the best way to do it; it is more important to balance the penalty scores and lower the higher metric but with multiplication, lowering already low penalty scores is prioritised as it is easier to get a high percentage change there
+                # the stabiliser is used to mitigate this limitation, but it is an imperfect method
+                static[move[1]] = move[2]
             else:
-                best_move = min(candidates, key = lambda i: i[2])
-                pre_move[bit_mat] = [best_move[0], [False, best_move[2] * best_move[2]]] # squares the scores so that when taking the average should recursion have occurred, higher scores will have a higher weightage, hence making the programme more pessimistic and focus on surviving
+                move[2] = static[move[1]]
+        if depth:
+            candidates.sort(key = lambda i: i[2])
+            test_index = 0
+            best_move = [None, [True, impossible_score]]
+            cut_off = impossible_score
+            while (test_index < len(candidates)) and (best_move[1][0] or (candidates[test_index][2][0] <= cut_off)): # if there is a way to lose by force, keep looking
+                if candidates[test_index][1] not in post_move:
+                    depth_scores = []
+                    for rown, row in enumerate(candidates[test_index][1]):
+                        for coln, col in enumerate(row):
+                            if col <= 1:
+                                test = tuple(rw if rwn != rown else tuple(cl if cln != coln else 2 for cln, cl in enumerate(row)) for rwn, rw in enumerate(candidates[test_index][1]))
+                                if test not in pre_move:
+                                    pre_move[test] = main_function(test, *make_moves(test, 1 + board_complexity - depth), depth - 1)
+                                depth_scores.append(pre_move[test][1])
+                    depth_scores.sort(key = lambda x: x[1])
+                    post_move[candidates[test_index][1]] = [any(i[0] for i in depth_scores), (sum(j[1] * ((i + 1) ** 0.5) for i, j in enumerate(depth_scores)) / sum((i + 1) ** 0.5 for i in range(len(depth_scores))))] # prioritises having no immediate way to lose, then uses a pessimistic weighted average score
+                if post_move[candidates[test_index][1]] < best_move[1]:
+                    best_move = [candidates[test_index][0], post_move[candidates[test_index][1]]]
+                    cut_off = (1 + (depth / board_complexity)) * candidates[test_index][2][0] # the search net for promising moves is cast wider initially, but is less important when further from the current position
+                test_index += 1
+            pre_move[bit_mat] = best_move
+        else:
+            best_move = min(candidates, key = lambda i: i[2])
+            pre_move[bit_mat] = [best_move[0], [False, best_move[2][0] * best_move[2][0]]] # squares the scores so that when taking the average should recursion have occurred, higher scores will have a higher weightage, hence making the programme more pessimistic and focus on surviving
         return pre_move[bit_mat]
     
     board_size = len(mat) * len(mat[0])
@@ -199,8 +176,9 @@ def AI(mat):
     impossible_score = 2 * (lose_score + (win_condition * board_size) + 1)
     merges, pre_move, post_move, static, forced_board, forced_row = {}, {}, {}, {}, {}, {} # dictionaries used for speed improvement since there was no space limitation; these are local dictionaries and follow the rules, existing only within each call
     bm = tuple(tuple(col.bit_length() for col in row) for row in mat) # non-mutable tuples are used as they are compatible with dictionaries
-    initial_stats = abs_forcer(bm)
-    board_complexity = (int(initial_stats[0] * abs_pos(bm) / ((board_size * initial_stats[1]) ** 2)).bit_length() + 1) // 2 if initial_stats[0] > 0 else 0 # determines the depth searched, prioritising surviving; the closer one is to losing (i.e. higher score and fewer blank squares), the deeper the search
+    initial_cands, won = make_moves(bm, 0)
+    initial_stats = [min(i[2][2][0] for i in initial_cands), max(i[2][2][1] for i in initial_cands), min(i[2][1] for i in initial_cands)]
+    board_complexity = (int(initial_stats[0] * initial_stats[2] / ((board_size * initial_stats[1]) ** 2)).bit_length() + 1) // 2 if initial_stats[0] > 0 else 0 # determines the depth searched, prioritising surviving; the closer one is to losing (i.e. higher score and fewer blank squares), the deeper the search
     #board_complexity = 0 #uncomment this line to test evaluation
     stabiliser = sum(col * col for row in bm for col in row if col > 1) * ((initial_stats[1] / board_size) ** 2) * 3 # the stabiliser is lower when there are more tiles on the board, representing an increased importance of merging when there are fewer tiles; it also increases in tandem with the sum of squares of tiles on the board, so that what is considered a 'noteworthy merge of larger tiles' is scored relative to the board situation
-    return main_function(bm, board_complexity)[0]
+    return main_function(bm, initial_cands, won, board_complexity)[0]
