@@ -1,7 +1,6 @@
 def AI(mat):
     
-    GOAL = 0 # I assumed that the game ends when 2048 is reached, and points scored after do not count. If this is not the case, please help me change this number to 0.
-
+    GOAL = 0 
     # The goal set will be rounded down to the nearest power of two less than or equal to it.
     # For unlimited mode, change the goal to 0.
     # The time taken to make each move grows as the number of high tiles on the board increases, so the time taken for higher goals will increase disproportionately.
@@ -145,6 +144,7 @@ def AI(mat):
             test_index = 0
             best_move = [None, [True, impossible_score]]
             cut_off = impossible_score
+            branch_factor = 1 + ((4 * depth) / (board_complexity * max(i[2][2][1] for i in candidates)))
             while (test_index < len(candidates)) and (best_move[1][0] or (candidates[test_index][2][0] <= cut_off)): # if there is a way to lose by force, keep looking
                 if candidates[test_index][1] not in post_move:
                     depth_scores = []
@@ -155,11 +155,10 @@ def AI(mat):
                                 if test not in pre_move:
                                     pre_move[test] = main_function(test, *make_moves(test, 1 + board_complexity - depth), depth - 1)
                                 depth_scores.append(pre_move[test][1])
-                    depth_scores.sort(key = lambda x: x[1])
-                    post_move[candidates[test_index][1]] = [any(i[0] for i in depth_scores), (sum(j[1] * ((i + 1) ** 0.5) for i, j in enumerate(depth_scores)) / sum((i + 1) ** 0.5 for i in range(len(depth_scores))))] # prioritises having no immediate way to lose, then uses a pessimistic weighted average score
+                    post_move[candidates[test_index][1]] = [any(i[0] for i in depth_scores), (sum(i[1] for i in depth_scores) / len(depth_scores))] # prioritises having no immediate way to lose, then uses a pessimistic weighted average score
                 if post_move[candidates[test_index][1]] < best_move[1]:
                     best_move = [candidates[test_index][0], post_move[candidates[test_index][1]]]
-                    cut_off = (1 + (depth / board_complexity)) * candidates[test_index][2][0] # the search net for promising moves is cast wider initially, but is less important when further from the current position
+                    cut_off = branch_factor * candidates[test_index][2][0] # the search net for promising moves is cast wider initially, but is less important when further from the current position
                 test_index += 1
             pre_move[bit_mat] = best_move
         else:
@@ -177,8 +176,10 @@ def AI(mat):
     merges, pre_move, post_move, static, forced_board, forced_row = {}, {}, {}, {}, {}, {} # dictionaries used for speed improvement since there was no space limitation; these are local dictionaries and follow the rules, existing only within each call
     bm = tuple(tuple(col.bit_length() for col in row) for row in mat) # non-mutable tuples are used as they are compatible with dictionaries
     initial_cands, won = make_moves(bm, 0)
+    if len(initial_cands) == 1: # Only 1 valid move
+        return initial_cands[0][0]
     initial_stats = [min(i[2][2][0] for i in initial_cands), max(i[2][2][1] for i in initial_cands), min(i[2][1] for i in initial_cands)]
-    board_complexity = (int(initial_stats[0] * initial_stats[2] / ((board_size * initial_stats[1]) ** 2)).bit_length() + 1) // 2 if initial_stats[0] > 0 else 0 # determines the depth searched, prioritising surviving; the closer one is to losing (i.e. higher score and fewer blank squares), the deeper the search
+    board_complexity = (int(initial_stats[0] * initial_stats[2] / ((board_size * initial_stats[1]) ** 2)).bit_length()) // 2 if initial_stats[0] > 0 else 0 # determines the depth searched, prioritising surviving; the closer one is to losing (i.e. higher score and fewer blank squares), the deeper the search
     #board_complexity = 0 #uncomment this line to test evaluation
     stabiliser = sum(col * col for row in bm for col in row if col > 1) * ((initial_stats[1] / board_size) ** 2) * 3 # the stabiliser is lower when there are more tiles on the board, representing an increased importance of merging when there are fewer tiles; it also increases in tandem with the sum of squares of tiles on the board, so that what is considered a 'noteworthy merge of larger tiles' is scored relative to the board situation
     return main_function(bm, initial_cands, won, board_complexity)[0]
