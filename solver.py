@@ -129,7 +129,7 @@ def AI(mat):
             return pre_move[bit_mat]
         if has_won:
             best_move = min(candidates, key = lambda i: i[2])
-            pre_move[bit_mat] = [best_move[0], [False, static[best_move[1]]]]
+            pre_move[bit_mat] = [best_move[0], [False, static[best_move[1]][0]]]
             return pre_move[bit_mat]
         for move in candidates:
             if move[1] not in static:
